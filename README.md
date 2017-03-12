@@ -7,15 +7,18 @@ Basic implementation of bar finite elements for truss structures
 
 ## Usage ##
 TrussFEM.exe materialPath nodePath elementPath boundaryConditionsPath
+
 materialPath, nodePath, elementPath, and boundaryConditionsPath are paths to text files describing the geometry, materials, and boundary conditions used to solve the truss problem. Their formats are described below.
 
 ## Input File Formats ##
 ### Material Definition File ###
 Material file is the following format:
+
 [id_1  A_1   E_1;
  id_2  A_2   E_2;
  ...
  id_MM A_MM  E_MM]
+
 where id_i is material i's unique integer id, A_i is the cross-sectional area of the material and E_i is the material's young's modulus.
 
 ### Node Definition File ###
