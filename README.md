@@ -6,8 +6,9 @@ Basic implementation of bar finite elements for truss structures
 * [LAPACK](http://icl.cs.utk.edu/lapack-for-windows/lapack/)
 
 ## Usage ##
-TrussFEM.exe materialPath nodePath elementPath boundaryConditionsPath  
-materialPath, nodePath, elementPath, and boundaryConditionsPath are paths to text files describing the geometry, materials, and boundary conditions used to solve the truss problem. Their formats are described below.
+TrussFEM.exe materialPath nodePath elementPath boundaryConditionsPath outFileNamePath
+materialPath, nodePath, elementPath, boundaryConditionsPath are paths to text files describing the geometry, materials, and boundary conditions used to solve the truss problem. Their formats are described below.  
+outFileNamePath is the base path to which the FEM output should be written.
 
 ## Input File Formats ##
 ### Material Definition File ###
