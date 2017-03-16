@@ -24,6 +24,7 @@ using ::f64;
 #define MIN(x,y) ((x)<(y) ? (x) : (y))
 #define MAX(x,y) ((x)>(y) ? (x) : (y))
 #define ABS(x) ((x)>0?(x):(-(x)))
+#define ROUND(x) ((s32)((x)+0.5))
 
 namespace TFM
 {

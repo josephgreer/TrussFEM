@@ -1,0 +1,34 @@
+/Clear, Start 
+/FileName, Three_Bar
+/Title, Three_Bar
+
+/PREP7
+ET,1,LINK180
+
+N, 1, 0
+N, 2, 1/2, sqrt(3)/2
+N, 3, 1, 0
+
+MPTEMP,,,,,,,,  
+MPTEMP,1,0  
+MPDATA,EX,1,,211e9  
+
+R,1,0.0049, ,0  
+
+E, 1, 2
+E, 2, 3
+E, 1, 3
+
+F,2,FX,2e4
+
+D,1, , , , , ,ALL, , , , , 
+D,3, UY, 0, , , , , , , , ,
+
+/SOL
+/STATUS,SOLU
+SOLVE   
+
+/POST1  
+SET,FIRST 
+
+PRNSOL,U,COMP     

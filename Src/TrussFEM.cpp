@@ -52,8 +52,8 @@ namespace TFM
     s32 incId = 0;
     for (s32 i = 0; i < nodes.n_rows; i++)
     {
-      s32 nid = (s32)(nodes(i, 0));
-      vec2 pos; pos << nodes(i, 1) << nodes(i, 2);
+      s32 nid = ROUND(nodes(i, 0));
+      vec2 pos; pos(0) = nodes(i, 1); pos(1) = nodes(i, 2);
       Node n; n.pos = pos; n.incId = incId++;
       m_nodes[nid] = n;
     }
@@ -63,7 +63,7 @@ namespace TFM
     }
     for (s32 i = 0; i < materials.n_rows; i++)
     {
-      s32 mid = (s32)(materials(i, 0));
+      s32 mid = ROUND(materials(i, 0));
       Material m; m.A = materials(i, 1); m.E = materials(i, 2);
       m_materials[mid] = m;
     }
@@ -73,10 +73,13 @@ namespace TFM
     }
     for (s32 i = 0; i < elements.n_rows; i++)
     {
-      s32 eid = (s32)(elements(i, 0));
-      s32 nid1 = (s32)(elements(i, 1));
-      s32 nid2 = (s32)(elements(i, 2));
-      s32 mid = (s32)(elements(i, 3));
+      s32 eid = ROUND(elements(i, 0));
+      s32 nid1 = ROUND(elements(i, 1));
+      s32 nid2 = ROUND(elements(i, 2));
+      s32 mid = ROUND(elements(i, 3));
+      m_elements[eid].mId = mid;
+      m_elements[eid].nodeIds(0) = nid1;
+      m_elements[eid].nodeIds(1) = nid2;
     }
 
     if (bcs.n_cols != 4) {
@@ -84,14 +87,14 @@ namespace TFM
     }
     for (s32 i = 0; i < bcs.n_rows; i++)
     {
-      s32 nid = (s32)(elements(i, 0));
-      s32 type = (s32)(elements(i, 1));
-      f64 v1 = (s32)(elements(i, 2));
-      f64 v2 = (s32)(elements(i, 3));
+      s32 nid = ROUND(bcs(i, 0));
+      s32 type = ROUND(bcs(i, 1));
+      f64 v1 = ROUND(bcs(i, 2));
+      f64 v2 = ROUND(bcs(i, 3));
 
       if (type == 1) {  // Constraint is a DOF constraint
-        s32 sv1 = (s32)v1;
-        s32 sv2 = (s32)v2;
+        s32 sv1 = ROUND(v1);
+        s32 sv2 = ROUND(v2);
         if ((sv1 != 0 && sv1 != 1) || (sv2 != 0 && sv2 != 1))
           throw std::runtime_error("Incorrect value for DOF constraint. Must be 0 or 1.");
         m_nodes[nid].bcs.dof(0) = sv1;
@@ -121,6 +124,9 @@ namespace TFM
     ApplyPenaltyMethod();
 
     Solve();
+
+    PostProcessStressesAndStrains();
+    PrintAndSaveResults();
   }
 
   // Global Stiffness Matrix
@@ -128,7 +134,7 @@ namespace TFM
   {
     LinkElement e; f64 A, E, l, k, theta;
     mat22 localStiffness;
-    mat44 globalStiffness = zeros(4,2);
+    mat globalStiffness = zeros(4,4);
     vec2 delta;
     Node ns[2];
     s32 oneToFourToNodeIds[4] = { 0,0,1,1 };
@@ -145,7 +151,7 @@ namespace TFM
 
       ns[0] = m_nodes[e.nodeIds(0)]; ns[1] = m_nodes[e.nodeIds(1)];
 
-      delta = ns[0].pos - ns[1].pos;
+      delta = ns[1].pos - ns[0].pos;
       l = norm(delta);
       k = A*E / l;
       theta = atan2(delta(1), delta(0));
@@ -162,8 +168,8 @@ namespace TFM
       s32 nnr, nnc;
       for (s32 rr = 0; rr < 4; rr++) {
         for (s32 cc = 0; cc < 4; cc++) {
-          nnr= 2 * ns[2 * oneToFourToNodeIds[rr]].incId + oneToFourPlusOnes[rr];
-          nnc = 2 * ns[2 * oneToFourToNodeIds[cc]].incId + oneToFourPlusOnes[cc];
+          nnr= 2 * ns[oneToFourToNodeIds[rr]].incId + oneToFourPlusOnes[rr];
+          nnc = 2 * ns[oneToFourToNodeIds[cc]].incId + oneToFourPlusOnes[cc];
           m_K(nnr, nnc) += globalStiffness(rr, cc);
         }
       }
@@ -172,7 +178,7 @@ namespace TFM
 
   void TrussFEMProblem::PopulateForceVector()
   {
-    m_F = zeros(m_nodes.size(), 1);
+    m_F = zeros(2*m_nodes.size(), 1);
     // For each node..
     Node n;
     for (std::map<s32, Node>::iterator i = m_nodes.begin(); i != m_nodes.end(); i++) {
@@ -185,30 +191,34 @@ namespace TFM
   {
     // For each node, apply the penalty method if that node's x or y degree of freedom is constrained.
     Node n;
+    m_Kstar = m_K;
     for (std::map<s32, Node>::iterator i = m_nodes.begin(); i != m_nodes.end(); i++) {
       n = i->second;
       if (n.bcs.dof(0) == 1)
-        m_K(2 * n.incId, 2 * n.incId) += KSTAR;
+        m_Kstar(2 * n.incId, 2 * n.incId) += KSTAR;
       if (n.bcs.dof(1) == 1)
-        m_K(2 * n.incId + 1, 2 * n.incId + 1) += KSTAR;
+        m_Kstar(2 * n.incId + 1, 2 * n.incId + 1) += KSTAR;
     }
   }
 
   void TrussFEMProblem::Solve()
   {
     // Check that the stiffness matrix is of the appropriate size
-    if (m_K.n_cols != m_nodes.size() || m_K.n_rows != m_nodes.size())
+    if (m_Kstar.n_cols != 2*m_nodes.size() || m_Kstar.n_rows != 2*m_nodes.size())
       throw std::runtime_error("Stiffness matrix dimensions do not match the number of nodes.");
 
-    if (m_F.n_rows != m_nodes.size())
+    if (m_F.n_rows != 2*m_nodes.size())
       throw std::runtime_error("Force vector dimensions do not match the number of nodes.");
 
     // Check that the condition number is not too high
-    if (cond(m_K) >= MAX_COND)
-      throw std::runtime_error("Stiffness matrix is ill-conditioned for solving (condition number = " + std::to_string(cond(m_K)) + ". Verify there are enough constraints.");
+    if (cond(m_Kstar) >= MAX_COND)
+      throw std::runtime_error("Stiffness matrix is ill-conditioned for solving (condition number = " + std::to_string(cond(m_Kstar)) + ". Verify there are enough constraints.");
 
     //Solve Ku = F for u
-    m_u = inv(m_K)*m_F;
+    m_u = inv(m_Kstar)*m_F;
+
+    // Subtract out applied forces to get reaction forces now that we know displacement
+    m_R = m_K*m_u-m_F;
   }
 
   void TrussFEMProblem::PostProcessStressesAndStrains()
@@ -255,7 +265,7 @@ namespace TFM
     arma::mat element_results, node_results;
 
     element_results = zeros(m_elements.size(), 3);
-    node_results = zeros(m_nodes.size(), 3);
+    node_results = zeros(m_nodes.size(), 7);
 
     printf("######################################################\n");
     printf("Element results\n");
@@ -268,13 +278,13 @@ namespace TFM
       element_results(ii, 0) = i->first;
       element_results(ii, 1) = i->second.results.epsilon_xx;
       element_results(ii, 2) = i->second.results.sigma_xx;
-      printf("Element Id = %d, Strain = %f Stress = %f\n", element_results(ii, 0), element_results(ii, 1), element_results(ii, 2));
+      printf("Element Id = %d, Strain = %f Stress = %f\n", ROUND(element_results(ii, 0)), element_results(ii, 1), element_results(ii, 2));
       ii++;
     }
     element_results.save(m_outFileName + "_element_results.txt", raw_ascii);
     printf("######################################################\n");
     printf("End Element results\n");
-    printf("######################################################\n");
+    printf("######################################################\n\n");
 
     printf("######################################################\n");
     printf("Node results\n");
@@ -287,8 +297,12 @@ namespace TFM
       node_results(ii, 0) = i->first;
       node_results(ii, 1) = i->second.results.epsilon_xx;
       node_results(ii, 2) = i->second.results.sigma_xx;
-      printf("Node Id = %d, Strain = %f, Stress = %f, ux = %f, uy = %f\n", node_results(ii, 0), node_results(ii, 1), 
-        node_results(ii, 2), m_u(2*i->second.incId), m_u(2*i->second.incId+1));
+      node_results(ii, 3) = m_u(2 * i->second.incId);
+      node_results(ii, 4) = m_u(2 * i->second.incId+1);
+      node_results(ii, 5) = m_R(2 * i->second.incId);
+      node_results(ii, 6) = m_u(2 * i->second.incId+1);
+        printf("Node Id = %d, Strain = %f, Stress = %f, ux = %f, uy = %f, Rx = %f, Ry = %f\n", ROUND(node_results(ii, 0)), node_results(ii, 1),
+          node_results(ii, 2), m_u(2 * i->second.incId), m_u(2 * i->second.incId + 1), m_R(2 * i->second.incId), m_R(2 * i->second.incId + 1));
       ii++;
     }
     node_results.save(m_outFileName + "_node_results.txt", raw_ascii);

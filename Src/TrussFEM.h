@@ -17,7 +17,7 @@ namespace TFM
       f64 sigma_xx;             // Average stress for every element containing this node
       f64 epsilon_xx;           // Average strain for every element containing this node
       s32 nel;                  // Number of elements that contain this node
-      NodeResults() : valid(false), nel(0) {}
+      NodeResults() : valid(false), nel(0), sigma_xx(0), epsilon_xx(0) {}
     } results;
     struct BoundaryConditions
     {
@@ -53,7 +53,7 @@ namespace TFM
     } results;
   };
 
-#define KSTAR 1e8
+#define KSTAR 1e12
 #define MAX_COND 1e6
 
   // Container for a truss FEM problem
@@ -64,7 +64,9 @@ namespace TFM
     std::map < s32, Node > m_nodes;                  // Stores the nodes (key is the node's unique ID)
     std::map < s32, LinkElement > m_elements;        // Stores the elements (key is the element's unique ID)
     arma::mat m_K;                                   // Stiffness matrix. Populated during class construction
+    arma::mat m_Kstar;                               // Stiffness matrix with penalty
     arma::vec m_F;                                   // Force Vector
+    arma::vec m_R;
     arma::vec m_u;                                   // Displacements. Needs to be solved for
     arma::vec m_exx;                                 // Strains in link direction
     arma::vec m_sigmaxx;                             // Stresses in link direction
